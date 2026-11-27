@@ -8540,3 +8540,8 @@ on and both results are kept with their options. SHAPE.md says this now. An eval
 reason for "not every task", which was the person's attention; what is left is cost. Proposed with it: passing
 comes before cheapest and fastest; the evaluator is itself checked against the person's blind pick on a sample and
 against misses found later. Open: every sub-task or a share.
+
+**And it is a build mode** (Sandy: "it would not be the default, but something we can turn on. So for a critical
+task I need to complete don't use it. If we have more time we use it"). Off unless turned on; on, every sub-task of
+that task is built twice. That answers "every sub-task or a share": the switch is the share. Open: where it is
+switched (the task, its project, the workflow).

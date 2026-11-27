@@ -293,6 +293,10 @@ Details and sources in `research/`.
   build runs a subtask twice. It chooses from a set of options. We have an evaluator and the best / cheapest /
   fastest is chosen. The result is recorded and saved to the option used. Then over time we have a constant eval
   process running"). Until the same day this said a second build was the exception. Nothing is built yet.
+  - **It is a build mode, off unless turned on** (Sandy, 2026-11-26: "it would not be the default, but something
+    we can turn on. So for a critical task I need to complete don't use it. If we have more time we use it"). A
+    task built without it is built once, as now. Turned on, every sub-task of that task is built twice. Where it
+    is switched (the task, its project, the workflow) is not decided.
   - **The unit is the sub-task**, or the whole task where a workflow has none (Main builds in one go).
   - **An option** is one way of building: a model, a skill, a builder's instructions, a requirement. An app has a
     set of them. Two are drawn for a sub-task and each builds it, from the same starting commit.
@@ -303,8 +307,8 @@ Details and sources in `research/`.
   - **Over time** each option has a record against every other it has met, on the same work.
   - **Proposed, not decided.** The evaluator is checked too: on a sample the person picks without knowing which is
     which, and a miss found later (what got through) counts against the option that built it and the evaluator
-    that chose it. Otherwise the options are improved toward what the evaluator can be fooled by. Whether it is
-    every sub-task or a share of them, and whether an option that keeps winning is tried against less often.
+    that chose it. Otherwise the options are improved toward what the evaluator can be fooled by. Whether an
+    option that keeps winning is tried against less often.
 - **Learn has two roles, and both end in ideas** (Sandy, 2026-11-16: "1 is to analyze observations, the other is to
   analyze the codebase. The latter would be the first step when you approach a new project … the learn agent can
   create ideas … it would also be the access point to the workbench docs").
