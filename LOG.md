@@ -8531,3 +8531,12 @@ comes before any second build; (2) a set of merged tasks with one fault planted 
 be run again when a prompt or model changes (trials replay only on tasks assumed good); (3) rounds, cost and
 corrections per task, compared by workflow and model; (4) a page per app that shows them. Open for (1): whether a
 miss is marked by the person, inferred by Evident, or both. The one-in-five is a first figure, to adjust.
+
+**Changed the same day** (Sandy: "each build runs a subtask twice. It chooses from a set of options. We have an
+evaluator and the best / cheapest / fastest is chosen. The result is recorded and saved to the option used. Then
+over time we have a constant eval process running"). The second build is not the exception: each sub-task (or the
+task, where there are none) is built by two options drawn from the app's set, an evaluator chooses, the winner goes
+on and both results are kept with their options. SHAPE.md says this now. An evaluator choosing takes away the
+reason for "not every task", which was the person's attention; what is left is cost. Proposed with it: passing
+comes before cheapest and fastest; the evaluator is itself checked against the person's blind pick on a sample and
+against misses found later. Open: every sub-task or a share.

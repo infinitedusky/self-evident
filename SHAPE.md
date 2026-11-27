@@ -286,21 +286,25 @@ Details and sources in `research/`.
   - **Observe**: what got through the checks is recorded against the task and the check that passed it.
   - **Learn**: on a regular look, the misses are read together and one cause is named.
   - **Change one setting**: a check's words, a requirement, a skill, a model, a workflow.
-  - **Try it**: a probe on past tasks (trials), anything that changes what is built on the next real tasks, as a
-    second build (below).
+  - **Try it**: a probe on past tasks (trials), anything that changes what is built on the next real tasks, built twice
+    (below).
   - **Keep it or put it back**, on the scores, and the change is linked to what it was tried on.
-- **A second build is the exception, and it is a test** (Sandy, 2026-11-26: "should we be A/B testing each task?
-  so that as we are building we always get two versions and choose which to submit"). Not every task: the person's
-  attention is what runs out, and two builds from the same settings say which won but not why. Nothing is built yet.
-  - **One build per task stays the default.** A second is made when a setting is on trial (a workflow, a model, a
-    skill, a requirement: the new against the old, on the next real tasks), when the person asks for one (a task
-    with more than one reasonable shape; the prototype is the cheaper place for that), or for a small standing
-    sample, about one task in five with the same settings twice, which says how much two runs differ by chance.
-  - **One thing differs**, and it is kept with the pair.
-  - **The checks score both first** (rounds to pass, what the probe found, mutation's score, cost). The person
-    picks without knowing which is which and gives a line of why. The pick and the scores are kept.
-  - **What it is for**: after enough pairs, whether the new setting wins, and whether the checks agree with the
-    person. Where they do not is where the checks are improved.
+- **Each piece of a build is built twice, and the result is kept with the option used** (Sandy, 2026-11-26: "each
+  build runs a subtask twice. It chooses from a set of options. We have an evaluator and the best / cheapest /
+  fastest is chosen. The result is recorded and saved to the option used. Then over time we have a constant eval
+  process running"). Until the same day this said a second build was the exception. Nothing is built yet.
+  - **The unit is the sub-task**, or the whole task where a workflow has none (Main builds in one go).
+  - **An option** is one way of building: a model, a skill, a builder's instructions, a requirement. An app has a
+    set of them. Two are drawn for a sub-task and each builds it, from the same starting commit.
+  - **An evaluator chooses**, never a builder. Proposed order: first what passes (the check, the probe, mutation's
+    score), then the cheapest of those, then the fastest, so a cheap wrong build never wins.
+  - **The winner goes on**: the next sub-task starts from it, and the other is dropped. Both results are kept with
+    their options: won or lost, the scores, cost, time.
+  - **Over time** each option has a record against every other it has met, on the same work.
+  - **Proposed, not decided.** The evaluator is checked too: on a sample the person picks without knowing which is
+    which, and a miss found later (what got through) counts against the option that built it and the evaluator
+    that chose it. Otherwise the options are improved toward what the evaluator can be fooled by. Whether it is
+    every sub-task or a share of them, and whether an option that keeps winning is tried against less often.
 - **Learn has two roles, and both end in ideas** (Sandy, 2026-11-16: "1 is to analyze observations, the other is to
   analyze the codebase. The latter would be the first step when you approach a new project … the learn agent can
   create ideas … it would also be the access point to the workbench docs").
